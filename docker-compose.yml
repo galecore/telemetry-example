@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  httpserver:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - otel-collector
+    environment:
+      - ADDR=:8080
+      - OTEL_SERVICE_NAME=echohttpserver
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=dev,service.version=1.0.0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - LOKI_PUSH_ENDPOINT=http://otel-collector:3100/loki/api/v1/push
+  httpclient:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["./httpclient"]
+    depends_on:
+      - httpserver
+      - otel-collector
+    environment:
+      - ENDPOINT=http://httpserver:8080
+      - OTEL_SERVICE_NAME=echohttpclient
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=dev,service.version=1.0.0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - LOKI_PUSH_ENDPOINT=http://otel-collector:3100/loki/api/v1/push
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    env_file:
+      - .otel-collector-env
