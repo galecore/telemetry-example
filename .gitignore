@@ -1,3 +1,4 @@
 .idea/
 vendor/
-.otel-collector-env
+examples/otel-collector/.env
+examples/alloy-collector/.env

@@ -2,36 +2,37 @@ version: '3.8'
 services:
   httpserver:
     build:
-      context: .
+      context: ../../.
       dockerfile: Dockerfile
     depends_on:
-      - otel-collector
+      - alloy-collector
     environment:
       - ADDR=:8080
       - OTEL_SERVICE_NAME=echohttpserver
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=dev,service.version=1.0.0
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=dns://alloy-collector:4317
       - OTEL_EXPORTER_OTLP_INSECURE=true
-      - LOKI_PUSH_ENDPOINT=http://otel-collector:3100/loki/api/v1/push
   httpclient:
     build:
-      context: .
+      context: ../../.
       dockerfile: Dockerfile
     command: ["./httpclient"]
     depends_on:
       - httpserver
-      - otel-collector
+      - alloy-collector
     environment:
       - ENDPOINT=http://httpserver:8080
       - OTEL_SERVICE_NAME=echohttpclient
       - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=dev,service.version=1.0.0
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=dns://alloy-collector:4317
       - OTEL_EXPORTER_OTLP_INSECURE=true
-      - LOKI_PUSH_ENDPOINT=http://otel-collector:3100/loki/api/v1/push
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    command: ["--config=/etc/otel-collector-config.yaml"]
+
+  alloy-collector:
+    image: grafana/alloy:latest
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/config/config.alloy",]
     volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./config.alloy:/etc/config/config.alloy
+    ports:
+      - "12345:12345" # https://grafana.com/docs/alloy/latest/troubleshoot/debug/#alloy-ui
     env_file:
-      - .otel-collector-env
+      - .env

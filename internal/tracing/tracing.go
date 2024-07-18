@@ -27,7 +27,7 @@ func NewTracerProvider(exporter sdktrace.SpanExporter) (*sdktrace.TracerProvider
 				- In DI it would be most sensible to aggregate an exporter from outside and not compose it here
 				- Trace exporters mainly use push model
 				- OTEL heavily pushes OTLP exporter protocol to be used in combination with their local OTEL Collector
-				- Collector is an agent (e.g. yandex push-client) running alongside that pushes telemetry further
+				- Collector is an agent (e.g. grafana alloy) running alongside that pushes telemetry further
 			- Sampler, which defines which portion of traces should be sampled
 			- Resource, which defines the base attributes for all spans
 				- obvious stuff like opentelemetry sdk version that created the span

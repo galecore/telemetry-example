@@ -2,60 +2,55 @@ package logs
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
-	"os"
 
-	"github.com/caarlos0/env/v10"
-	"github.com/grafana/loki-client-go/loki"
-	slogloki "github.com/samber/slog-loki/v3"
-	slogmulti "github.com/samber/slog-multi"
-	"golang.org/x/sync/errgroup"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	"go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-type lokiConfig struct {
-	Endpoint string `env:"LOKI_PUSH_ENDPOINT"`
-	TenantID string `env:"LOKI_TENANT_ID"`
+// ScopeName is not given by the otelslog bridge, for some reason
+// todo: resolve this in https://github.com/open-telemetry/opentelemetry-go-contrib/issues/5927
+const ScopeName = "go.opentelemetry.io/contrib/bridges/otelslog"
+
+func NewExporter(ctx context.Context) (*otlploggrpc.Exporter, error) {
+	/*
+		There are tons of configuration options for OTLP exporter. They can all be set via environment variables.
+		Mainly: OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_INSECURE, and many more.
+	*/
+	return otlploggrpc.New(ctx)
 }
 
-func NewLokiClientFromEnv() (*loki.Client, error) {
-	var cfg lokiConfig
-	if err := env.Parse(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to load loki config: %w", err)
-	}
-	config, err := loki.NewDefaultConfig(cfg.Endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create loki config: %w", err)
-	}
-	config.TenantID = cfg.TenantID
+func NewLoggerProvider(exporter log.Exporter) (*log.LoggerProvider, error) {
+	/*
+			LoggerProvider is a factory for Loggers.
 
-	client, err := loki.New(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create loki client: %w", err)
-	}
-	return client, nil
-}
+			In order to create a LoggerProvider, you need to state several other entities:
+			- kind of mandatory things that devs want to set, even though you can create a LoggerProvider without them:
+				- Exporter, which defines where the logs should be sent
+			    - BatchProcessor, which is used to batch logs before sending them
+				- Resource, which defines the base attributes for all logs
+					- obvious stuff like opentelemetry sdk version that created the log
+					- more app-oriented stuff like service name
+			- other things:
+				- Different LogProcessors could be set here, which give you access to the created records
+					- Custom LogProcessors usually add some filtration rules or additional attributes to logs
+					- In reality, when an exporter is given to the LoggerProvider, it is just a kind of LogProcessor
+					- That means that exporter should be placed at the end, as they are called in order of registration
 
-func NewLogger(ctx context.Context, g *errgroup.Group, options *slog.HandlerOptions) (*slog.Logger, error) {
-	lokiClient, err := NewLokiClientFromEnv()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create loki client: %w", err)
-	}
+			Logger is used to log records.
 
-	g.Go(func() error {
-		<-ctx.Done()
-		lokiClient.Stop()
-		return nil
-	})
+			This is a "direct-to-exporter" setup, which resembles the logic of other OTel components.
+		    At the same time, in some cases (for example apps where performance is most crucial),
+			it might be more beneficial to export logs directly to files or stdout,
+			and process them in the collector separately.
+			In such cases, otel would not be used in the app logging part.
+	*/
 
-	return slog.New(slogmulti.Fanout(
-		slog.NewTextHandler(os.Stdout, options),
-		slogloki.Option{
-			Level:       options.Level,
-			Client:      lokiClient,
-			Converter:   slogloki.DefaultConverter,
-			AddSource:   options.AddSource,
-			ReplaceAttr: options.ReplaceAttr,
-		}.NewLokiHandler(),
-	)), nil
+	r := resource.Default()
+	processor := log.NewBatchProcessor(exporter)
+	provider := log.NewLoggerProvider(
+		log.WithResource(r),
+		log.WithProcessor(processor),
+	)
+	return provider, nil
 }
