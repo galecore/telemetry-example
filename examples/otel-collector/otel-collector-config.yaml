@@ -3,7 +3,7 @@ extensions:
     # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/basicauthextension
     client_auth:
       username: "${env:GRAFANA_CLOUD_USERNAME}"
-      password: "${env:GRAFANA_CLOUD_API_KEY}"
+      password: "${env:GRAFANA_CLOUD_PASSWORD}"
   bearertokenauth/grafana_cloud:
     # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/bearertokenauthextension
     scheme: "Bearer"
